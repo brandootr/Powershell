@@ -1,9 +1,4 @@
-function global:get-adcomputerinfo{
-Param(
-
-   [Parameter(Mandatory=$true)]
-
-   [string]$ComputerInfoFile)
+function global:get-adcomputerinfo($ComputerInfoFile){
 #$ComputerInfoFile='c:\CC\Servers4.txt'
 $header="<!DOCTYPE html>
 <html>
@@ -89,14 +84,14 @@ $cnames=get-adcomputer -Filter * | select -expandProperty name
 
 foreach ($cname in $cnames){
 write-host "Accessing Server $cname"
+$updates=@(Get-WUList -ComputerName $cname | select  -Property KB,Title)
 
 # Run test to verify the server is available, if it is not it will be skipped
 
-$connectiontest=Test-NetConnection $cname | select -ExpandProperty PingSucceeded
-
+$connectiontest=Test-NetConnection $cname | select -Property PingSucceeded,remoteaddress,IPAddressToString
 # Begin examining reachable Server
 
-if ($connectiontest -eq $true){
+if ($connectiontest.PingSucceeded -eq $true){
 $cinfo=Get-CimInstance -ComputerName $cname -ClassName Win32_OperatingSystem |
   Select-Object -Property BuildNumber,BuildType,OSType,ServicePackMajorVersion,ServicePackMinorVersion
 
@@ -129,9 +124,10 @@ if ($ostype -eq  9600)
     $ostype="Server 2012 R2"
     }
 
-
+$ipstring='<li> IP Address <b>' + $connectiontest.remoteaddress.IPAddressToString + '</b></li>'
 add-content -Path $ComputerInfoFile -Value "<h1><font color=red>$cname $ostype</font></h1>"
 add-content -path $ComputerInfoFile -Value "<button class=""collapsible"">Info</button>`r`n<div class=""content""><ol class=""b"">"
+add-content -Path $ComputerInfoFile -Value $ipstring
 add-content -Path $ComputerInfoFile -Value "<li>Total CPU Cores is <b>$cores</b></li>"
 add-content -Path $ComputerInfoFile -Value "<li>Total Logical Processors is <b>$cputotal</b></li>"
 foreach($d in $disks){
@@ -140,11 +136,19 @@ $tsize= ($d.size / 1073741824)
 $tsize= ([Math]::Round($tsize, 0))
 $tfree= ($d.FreeSpace / 1073741824)
 $tfree= ([Math]::Round($tfree, 0))
-$diskstring='<li><b>' + $dletter + ' </b>Total Size <b>' + $tsize + ' </b>MB Free Space <b>' + $tfree + ' </b>MB</li>'
+$diskstring='<li><b>' + $dletter + ' </b>Total Size <b>' + $tsize + ' </b>GB Free Space <b>' + $tfree + ' </b>GB</li>'
 Add-Content -path $ComputerInfoFile -value $diskstring
 }
 #add-content -path $ComputerInfoFile -Value $diskinfo | ft
 add-content -path $ComputerInfoFile -Value "<li>Total Memory <b>$mem</b> GB</li></ol></div>"
+add-content -path $ComputerInfoFile -Value "<button class=""collapsible"">Available Updates</button>`r`n<div class=""content""><ol class=""b"">"
+foreach($u in $updates){
+$kb=$u.kb
+$utitle=$u.title
+$ustring= '<li>'+ 'Article ' + $kb + ' ' + $utitle + '</li>'
+add-content -path $ComputerInfoFile -Value $ustring
+}
+Add-Content -path $ComputerInfoFile -Value '</ol></div>'
 #add-content -path $ComputerInfoFile -Value $cpuinfo
 #Add-Content -Path $ComputerInfoFile -Value "`r`n"
 }
